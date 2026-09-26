@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RechargeSereine — La recharge électrique sans mauvaise surprise</title>
+    <style>
+      :root { font-family: Inter, system-ui, sans-serif; color: #111827; background: #f8fafc; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%); color: #f1f5f9; }
+      header { padding: 60px 20px 40px; text-align: center; }
+      .logo { font-size: 42px; }
+      h1 { font-size: 34px; margin: 16px 0 12px; }
+      .tagline { font-size: 19px; color: #94a3b8; max-width: 640px; margin: 0 auto; line-height: 1.5; }
+      .badge { display: inline-block; background: #10b981; color: #052e1a; font-weight: 700; padding: 6px 14px; border-radius: 999px; font-size: 13px; margin-bottom: 18px; }
+      section { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 16px; }
+      .card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 20px; }
+      .card h3 { font-size: 17px; margin-bottom: 8px; color: #34d399; }
+      .card p { font-size: 14.5px; color: #cbd5e1; line-height: 1.5; }
+      .form-box { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 28px; margin-top: 20px; }
+      .form-box h2 { font-size: 24px; margin-bottom: 8px; }
+      .form-box p.sub { color: #94a3b8; margin-bottom: 20px; font-size: 15px; }
+      label { display: block; font-size: 13.5px; color: #cbd5e1; margin: 14px 0 6px; }
+      input, select { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid #334155; background: #0f172a; color: #f1f5f9; font-size: 15px; }
+      button { margin-top: 22px; width: 100%; padding: 14px; border: 0; border-radius: 10px; background: #10b981; color: #04250f; font-size: 16.5px; font-weight: 800; cursor: pointer; }
+      button:hover { background: #34d399; }
+      .ok { margin-top: 16px; background: #10b98122; border: 1px solid #10b981; color: #6ee7b7; padding: 14px; border-radius: 10px; display: none; font-size: 15px; }
+      footer { text-align: center; color: #64748b; font-size: 13px; padding: 40px 20px; }
+      .step { color: #34d399; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="logo">⚡🔌</div>
+      <div class="badge">EN PRÉPARATION — REJOIGNEZ LES TESTEURS</div>
+      <h1>RechargeSereine</h1>
+      <p class="tagline">La recharge de votre voiture électrique, <strong>sans mauvaise surprise</strong>. Bornes fiables, prix réels comparés, trajet planifié — le tout dans une seule app.</p>
+    </header>
+
+    <section>
+      <h2 style="text-align:center">Vous reconnaissez ces situations ?</h2>
+      <div class="cards">
+        <div class="card">
+          <h3>🧩 Trop d'applis</h3>
+          <p>Un trajet = jongler entre 5 applis de recharge selon l'opérateur de chaque borne. RechargeSereine les remplace toutes.</p>
+        </div>
+        <div class="card">
+          <h3>🔌 Bornes en panne</h3>
+          <p>Vous arrivez, la borne ne marche pas. La communauté signale en temps réel les bornes HS, lentes ou occupées.</p>
+        </div>
+        <div class="card">
+          <h3>💸 Prix opaques</h3>
+          <p>Tarif à la minute, au kWh, abonnement… Un seul chiffre : le coût réel de votre recharge, comparé partout.</p>
+        </div>
+        <div class="card">
+          <h3>🗺️ Trop de calculs</h3>
+          <p>Planifiez un long trajet en 30 secondes : arrêts optimaux, puissance de chaque borne, temps de charge estimé.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="form-box">
+        <h2>Devenez testeur pilote 🚗</h2>
+        <p class="sub">L'application est en préparation. Inscrivez-vous : vous serez parmi les premiers à l'essayer, et votre avis façonnera la version finale.</p>
+        <form id="form" action="https://formsubmit.co/pascal.gerard08@gmail.com" method="POST">
+          <input type="hidden" name="_subject" value="Nouveau testeur RechargeSereine !" />
+          <input type="hidden" name="_captcha" value="false" />
+          <input type="hidden" name="_template" value="table" />
+          <input type="text" name="_honey" style="display:none" />
+          <label for="nom">Votre prénom</label>
+          <input id="nom" name="nom" placeholder="Ex. Marie" required />
+          <label for="email">Votre e-mail</label>
+          <input id="email" name="email" type="email" placeholder="marie@exemple.fr" required />
+          <label for="ve">Quelle voiture électrique conduisez-vous ?</label>
+          <select id="ve" name="ve">
+            <option>Tesla</option>
+            <option>Renault (Zoe, Megane, R5)</option>
+            <option>Peugeot / Citroën / Opel</option>
+            <option>Hyundai / Kia</option>
+            <option>BMW / Mercedes / Audi</option>
+            <option>Autre</option>
+          </select>
+          <button type="submit">Je veux être testeur ⚡</button>
+          <div class="ok" id="ok">✅ Merci ! Vous êtes sur la liste des testeurs. On vous contacte dès la première version.</div>
+        </form>
+      </div>
+    </section>
+
+    <footer>
+      <p>Un projet de Pascal Gérard — créateur de Silence, l'app de focus qui agit pour vous.</p>
+      <p style="margin-top:8px">Bientôt sur iOS & Android</p>
+    </footer>
+
+    <script>
+      document.getElementById("form").addEventListener("submit", function (e) {
+        setTimeout(function () {
+          document.getElementById("ok").style.display = "block";
+          document.getElementById("form").style.display = "none";
+        }, 500);
+      });
+    </script>
+  </body>
+</html>
