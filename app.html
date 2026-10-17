@@ -680,7 +680,7 @@ async function calculerTrajet() {
     (optimiser && etapes.length
       ? '<div style="font-size:.82rem;color:var(--gris);margin-bottom:8px">💸 Mode <b>optimiser le coût</b> : bornes hors autoroute privilégiées quand elles sont moins chères.</div>'
       : (etapes.length ? '<div style="font-size:.82rem;color:var(--gris);margin-bottom:8px">⚡ Mode rapide : bornes les plus puissantes privilégiées.</div>' : '')) +
-    etapes.map((e, i) =>
+    coutParEtape.map((e, i) =>
       '<div class="etape' + (e.prix >= PRIX_AUTOROUTE ? " autoroute" : "") + '">' +
         '<div class="num">' + (i + 1) + '</div>' +
         '<div class="detail"><b>' + e.station.enseigne + '</b>' +
