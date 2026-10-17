@@ -686,8 +686,10 @@ async function calculerTrajet() {
   const distanceTotale = Math.round(distanceKm(depart.lat, depart.lon, arrivee.lat, arrivee.lon) * FACTEUR_ROUTE);
   const kWhTotal = Math.round(distanceTotale * conso);
 
-  // Candidates : toutes les bornes chargées + démo, dans un couloir de 40 km autour de la ligne
-  const candidats = stations.concat(STATIONS_DEMO.filter(d => !stations.some(s => s.id === d.id)))
+  // Candidates : bornes affichées + réserve intégrée de 824 bornes officielles + démo,
+  // dans un couloir de 40 km autour de la ligne
+  const reserveIntegree = bornesOffline("").filter(r => !stations.some(s => s.id === r.id) && !STATIONS_DEMO.some(d => d.id === r.id));
+  const candidats = stations.concat(reserveIntegree).concat(STATIONS_DEMO.filter(d => !stations.some(s => s.id === d.id)))
     .filter(s => !marqueurPresent(s)) // on écarte les bornes signalées HS 🎯
     .filter(s => {
       const total = distanceKm(depart.lat, depart.lon, s.lat, s.lon) + distanceKm(s.lat, s.lon, arrivee.lat, arrivee.lon);
