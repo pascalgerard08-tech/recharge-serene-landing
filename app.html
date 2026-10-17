@@ -620,23 +620,38 @@ async function calculerTrajet() {
 
   // Stratégie : si le trajet dépasse l'autonomie, on propose des étapes
   const etapes = [];
+  const dejaUtilisees = new Set();
   let position = depart, restant = distanceTotale, autonomieRestante = autonomie;
   let securite = 0;
-  while (restant > autonomieRestante && securite < 6) {
+  while (restant > autonomieRestante && securite < 8) {
     securite++;
-    // On cherche la borne atteignable la plus « avancée » sur le trajet ; si optimisation : parmi les moins chères
-    let atteignables = candidats.filter(s => distanceKm(position.lat, position.lon, s.lat, s.lon) <= autonomieRestante * 0.9);
-    if (!atteignables.length) break;
+    // Bornes atteignables, PAS déjà utilisées, et qui FONT PROGRESSER vers l'arrivée
+    let atteignables = candidats.filter(s => {
+      if (dejaUtilisees.has(s.id)) return false;
+      const dPosition = distanceKm(position.lat, position.lon, s.lat, s.lon);
+      if (dPosition > autonomieRestante * 0.9) return false;
+      // la borne doit nous rapprocher de l'arrivée (sinon on tourne en rond)
+      const dAvant = distanceKm(position.lat, position.lon, arrivee.lat, arrivee.lon);
+      const dApres = distanceKm(s.lat, s.lon, arrivee.lat, arrivee.lon);
+      return dApres < dAvant - 1;
+    });
+    if (!atteignables.length) {
+      if (etapes.length) {
+        etapes.eteinte = true; // marqueur interne : itinéraire incomplet
+      }
+      break;
+    }
     if (optimiser) {
-      // parmis les 40% les plus proches de l'arrivée, on prend la moins chère
+      // parmi les bornes qui font bien avancer (les 40% les plus proches de l'arrivée), la moins chère — mais jamais plus de 25% de détour sur le prix autoroute si elle est lente
       atteignables.sort((a, b) => distanceKm(a.lat, a.lon, arrivee.lat, arrivee.lon) - distanceKm(b.lat, b.lon, arrivee.lat, arrivee.lon));
       atteignables = atteignables.slice(0, Math.max(3, Math.ceil(atteignables.length * 0.4)));
       atteignables.sort((a, b) => extrairePrix(a) - extrairePrix(b));
     } else {
-      // mode classique : la plus puissante
+      // mode classique : la plus puissante parmi celles qui avancent le plus
       atteignables.sort((a, b) => (b.puissance - a.puissance) || (distanceKm(a.lat, a.lon, arrivee.lat, arrivee.lon) - distanceKm(b.lat, b.lon, arrivee.lat, arrivee.lon)));
     }
     const choix = atteignables[0];
+    dejaUtilisees.add(choix.id);
     const dEffectuee = Math.round(distanceKm(position.lat, position.lon, choix.lat, choix.lon) * FACTEUR_ROUTE);
     etapes.push({ station: choix, kmDepuis: dEffectuee });
     position = choix;
@@ -645,8 +660,12 @@ async function calculerTrajet() {
   }
 
   // Estimation du coût
-  const coutParEtape = etapes.map(e => ({ ...e, prix: extrairePrix(e.station), kwh: Math.round(e.kmDepuis * conso) }));
-  const coutTotal = coutParEtape.reduce((t, e) => t + e.kwh * e.prix, 0);
+  const coutParEtape = etapes.map(e => ({
+    ...e,
+    prix: extrairePrix(e.station),
+    kwh: Math.max(1, Math.round((e.kmDepuis || 0) * conso))
+  }));
+  const coutTotal = coutParEtape.reduce((t, e) => t + e.kwh * (e.prix || 0), 0);
   const coutAutoroute = kWhTotal * PRIX_AUTOROUTE;
   const economie = Math.max(0, coutAutoroute - coutTotal);
 
@@ -669,7 +688,9 @@ async function calculerTrajet() {
           'Recharge estimée : ' + e.kwh + ' kWh à <span class="prix">' + (e.prix === 0 ? "GRATUIT 🎉" : String(e.prix).replace(".", ",") + " €/kWh ≈ " + (e.kwh * e.prix).toFixed(1).replace(".", ",") + " €") + '</span>' +
         '</div></div>'
     ).join("") +
-    (etapes.length ? "" : '<div class="avertissement">✅ Votre autonomie (' + autonomie + ' km) couvre ce trajet. Pensez tout de même à vérifier une borne de secours à l\'arrivée !</div>');
+    (etapes.length
+      ? '<div class="avertissement">ℹ️ Version pilote : le planificateur choisit parmi les bornes <b>affichées à l\'écran</b>. Pour un long trajet, recherchez d\'abord les grandes villes de votre itinéraire (ex : Nantes, Bordeaux, Toulouse…) pour enrichir les étapes proposées.</div>'
+      : '<div class="avertissement">✅ Votre autonomie (' + autonomie + ' km) couvre ce trajet. Pensez tout de même à vérifier une borne de secours à l\'arrivée !</div>');
 
   // Tracé du trajet sur la carte
   if (carte) {
