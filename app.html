@@ -298,6 +298,27 @@ const TYPES_SIGNALEMENT = {
    ========================================================= */
 const API_BASE = "https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/bornes-irve/records";
 
+// Requête résiliente : route directe, puis relais publics si le réseau bloque le serveur de l'État
+async function apiFetch(url) {
+  try {
+    const r = await fetch(url);
+    if (r.ok) return await r.json();
+  } catch (e) { /* réseau bloqué : on tente les relais */ }
+  const relais = [
+    "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
+    "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url)
+  ];
+  for (const r of relais) {
+    try {
+      const rep = await fetch(r);
+      if (!rep.ok) continue;
+      const txt = await rep.text();
+      return JSON.parse(txt);
+    } catch (e) { /* relais suivant */ }
+  }
+  throw new Error("injoignable");
+}
+
 function normaliserApi(r) {
   const f = r || {};
   const lat = f.consolidated_latitude, lon = f.consolidated_longitude;
@@ -329,9 +350,7 @@ async function chercherParCommune(nomCommune) {
   ];
   for (const v of variantes) {
     try {
-      const reponse = await fetch(API_BASE + v);
-      if (!reponse.ok) continue;
-      const data = await reponse.json();
+      const data = await apiFetch(API_BASE + v);
       if (data.results && data.results.length) {
         return data.results.map(normaliserApi).filter(s => s.lat !== null);
       }
@@ -347,9 +366,7 @@ async function chercherAutour(lat, lon, rayonKm) {
     '%20AND%20consolidated_latitude%20%3C%20' + (lat + dLat) +
     '%20AND%20consolidated_longitude%20%3E%20' + (lon - dLon) +
     '%20AND%20consolidated_longitude%20%3C%20' + (lon + dLon);
-  const reponse = await fetch(url);
-  if (!reponse.ok) throw new Error("API injoignable (" + reponse.status + ")");
-  const data = await reponse.json();
+  const data = await apiFetch(url);
   // on garde les bornes vraiment dans le rayon (cercle, pas le carré)
   return data.results.map(normaliserApi).filter(s => s.lat !== null && distanceKm(lat, lon, s.lat, s.lon) <= rayonKm);
 }
