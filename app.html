@@ -299,20 +299,26 @@ const TYPES_SIGNALEMENT = {
 const API_BASE = "https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/bornes-irve/records";
 
 // Requête résiliente : route directe, puis relais publics si le réseau bloque le serveur de l'État
+// Chaque tentative est limitée à 9 s pour basculer vite vers la réserve intégrée
+function fetchAvecDelai(url, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms || 9000);
+  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
 async function apiFetch(url) {
   // 1) route directe (la plus rapide quand le réseau l'autorise)
   try {
-    const r = await fetch(url);
+    const r = await fetchAvecDelai(url);
     if (r.ok) return await r.json();
   } catch (e) { /* réseau bloqué : on tente les relais */ }
   // 2) relais public n°1 : allorigins
   try {
-    const rep = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
+    const rep = await fetchAvecDelai("https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
     if (rep.ok) return await rep.json();
   } catch (e) { /* relais suivant */ }
   // 3) relais public n°2 : r.jina.ai (renvoie le JSON noyé dans du texte, on l'extrait)
   try {
-    const rep = await fetch("https://r.jina.ai/" + url);
+    const rep = await fetchAvecDelai("https://r.jina.ai/" + url);
     if (rep.ok) {
       const txt = await rep.text();
       const debut = txt.indexOf('{"total_count"');
@@ -321,7 +327,7 @@ async function apiFetch(url) {
   } catch (e) { /* relais suivant */ }
   // 4) relais public n°3 : codetabs
   try {
-    const rep = await fetch("https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url));
+    const rep = await fetchAvecDelai("https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url));
     if (rep.ok) return await rep.json();
   } catch (e) { /* aucun relais disponible */ }
   throw new Error("injoignable");
@@ -739,15 +745,26 @@ async function calculerTrajet() {
       }
       break;
     }
+    // Anti-détour : bornes proches de la ligne directe (détour ≤ 4% du reste), arrêts espacés, rapides si possible
+    const resteDirect = distanceKm(position.lat, position.lon, arrivee.lat, arrivee.lon);
+    const detour = s => distanceKm(position.lat, position.lon, s.lat, s.lon) + distanceKm(s.lat, s.lon, arrivee.lat, arrivee.lon) - resteDirect;
+    // On évite les arrêts trop rapprochés du point de départ (inutiles pour progresser)
+    let utiles = atteignables.filter(s => distanceKm(position.lat, position.lon, s.lat, s.lon) >= Math.min(40, resteDirect * 0.3));
+    if (!utiles.length) utiles = atteignables;
+    const surLaRoute = utiles.filter(s => detour(s) <= Math.max(6, resteDirect * 0.04));
+    let choisissables = surLaRoute.length ? surLaRoute : utiles;
+    // Priorité aux bornes rapides (≥ 150 kW) quand elles existent sur la route
+    const rapides = choisissables.filter(s => s.puissance >= 150);
+    if (rapides.length) choisissables = rapides;
+    // La borne la plus proche de la route directe ; à égalité, la plus puissante
+    choisissables.sort((a, b) => detour(a) - detour(b) || (b.puissance - a.puissance) || (distanceKm(a.lat, a.lon, arrivee.lat, arrivee.lon) - distanceKm(b.lat, b.lon, arrivee.lat, arrivee.lon)));
+
     if (optimiser) {
-      // parmi les bornes qui font bien avancer (les 40% les plus proches de l'arrivée), la moins chère — mais jamais plus de 25% de détour sur le prix autoroute si elle est lente
-      atteignables.sort((a, b) => distanceKm(a.lat, a.lon, arrivee.lat, arrivee.lon) - distanceKm(b.lat, b.lon, arrivee.lat, arrivee.lon));
-      atteignables = atteignables.slice(0, Math.max(3, Math.ceil(atteignables.length * 0.4)));
-      atteignables.sort((a, b) => extrairePrix(a) - extrairePrix(b));
-    } else {
-      // mode classique : la plus puissante parmi celles qui avancent le plus
-      atteignables.sort((a, b) => (b.puissance - a.puissance) || (distanceKm(a.lat, a.lon, arrivee.lat, arrivee.lon) - distanceKm(b.lat, b.lon, arrivee.lat, arrivee.lon)));
+      // Mode économie : parmi les bornes sur la route, les moins chères d'abord (à détour égal)
+      choisissables = choisissables.slice(0, Math.max(3, Math.ceil(choisissables.length * 0.4)));
+      choisissables.sort((a, b) => extrairePrix(a) - extrairePrix(b) || detour(a) - detour(b));
     }
+    atteignables = choisissables;
     const choix = atteignables[0];
     dejaUtilisees.add(choix.id);
     const dEffectuee = Math.round(distanceKm(position.lat, position.lon, choix.lat, choix.lon) * FACTEUR_ROUTE);
