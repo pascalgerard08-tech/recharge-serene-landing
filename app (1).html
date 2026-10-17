@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RechargeSereine — Trouvez une borne, sereinement</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root {
+    --vert: #16a34a;
+    --vert-fonce: #15803d;
+    --bleu: #0284c7;
+    --fond: #f0fdf4;
+    --carte: #ffffff;
+    --texte: #1f2937;
+    --gris: #6b7280;
+    --rouge: #dc2626;
+    --ombre: 0 4px 14px rgba(0,0,0,.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--fond); color: var(--texte); }
+
+  /* ---------- EN-TÊTE ---------- */
+  header {
+    background: linear-gradient(135deg, var(--vert-fonce), var(--bleu));
+    color: #fff; padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  header .logo { font-size: 1.35rem; font-weight: 800; letter-spacing: .3px; }
+  header .logo .eclair { color: #fde047; }
+  header .slogan { font-size: .85rem; opacity: .92; }
+  header .badge-beta {
+    margin-left: auto; background: #fde047; color: #713f12; font-size: .72rem; font-weight: 700;
+    padding: 4px 10px; border-radius: 999px;
+  }
+
+  /* ---------- BARRE DE RECHERCHE ---------- */
+  .barre {
+    background: var(--carte); padding: 12px 18px; box-shadow: var(--ombre);
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center; position: sticky; top: 0; z-index: 1000;
+  }
+  .barre input[type="text"] {
+    flex: 1; min-width: 220px; padding: 10px 14px; border: 2px solid #d1fae5; border-radius: 10px;
+    font-size: 1rem; outline: none;
+  }
+  .barre input[type="text"]:focus { border-color: var(--vert); }
+  .barre button {
+    padding: 10px 16px; border: none; border-radius: 10px; font-size: .95rem; font-weight: 600;
+    cursor: pointer; background: var(--vert); color: #fff; transition: background .15s;
+  }
+  .barre button:hover { background: var(--vert-fonce); }
+  .barre button.secondaire { background: #e0f2fe; color: var(--bleu); }
+  .barre button.secondaire:hover { background: #bae6fd; }
+
+  /* ---------- FILTRES ---------- */
+  .filtres {
+    display: flex; gap: 14px; padding: 10px 18px; align-items: center; flex-wrap: wrap;
+    font-size: .88rem; color: var(--gris);
+  }
+  .filtres label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .filtres select { padding: 6px 10px; border-radius: 8px; border: 1px solid #d1d5db; }
+
+  /* ---------- CONTENU : CARTE + LISTE ---------- */
+  .contenu { display: flex; gap: 0; height: calc(100vh - 128px); min-height: 420px; }
+  #carte { flex: 1.4; min-width: 320px; }
+  .panneau-liste {
+    width: 360px; max-width: 45vw; background: var(--carte); overflow-y: auto; box-shadow: -4px 0 14px rgba(0,0,0,.06);
+  }
+  @media (max-width: 800px) {
+    .contenu { flex-direction: column; height: auto; }
+    #carte { height: 55vh; min-height: 320px; }
+    .panneau-liste { width: 100%; max-width: none; max-height: 45vh; }
+  }
+
+  /* ---------- LISTE DES STATIONS ---------- */
+  .info-statut { padding: 12px 16px; font-size: .85rem; color: var(--gris); background: #f8fafc; border-bottom: 1px solid #e5e7eb; }
+  .info-statut b { color: var(--texte); }
+  .station { padding: 14px 16px; border-bottom: 1px solid #eef2f1; cursor: pointer; transition: background .12s; }
+  .station:hover { background: #f0fdf4; }
+  .station h3 { font-size: .98rem; margin-bottom: 3px; }
+  .station .commune { font-size: .82rem; color: var(--gris); margin-bottom: 6px; }
+  .etiquettes { display: flex; gap: 6px; flex-wrap: wrap; }
+  .etq { font-size: .72rem; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+  .etq.puissance { background: #dbeafe; color: #1d4ed8; }
+  .etq.pdc { background: #dcfce7; color: #166534; }
+  .etq.tarif { background: #fef9c3; color: #854d0e; }
+  .etq.hors-service { background: #fee2e2; color: #b91c1c; }
+  .etq.gratuit { background: #d9f99d; color: #3f6212; }
+
+  /* ---------- FICHE DÉTAIL ---------- */
+  .fiche-overlay {
+    position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none;
+    align-items: flex-end; justify-content: center; z-index: 2000;
+  }
+  .fiche-overlay.ouvert { display: flex; }
+  .fiche {
+    background: #fff; width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto;
+    border-radius: 18px 18px 0 0; padding: 20px 22px 28px;
+  }
+  @media (min-width: 700px) {
+    .fiche-overlay { align-items: center; }
+    .fiche { border-radius: 18px; }
+  }
+  .fiche .fermer { float: right; border: none; background: #f1f5f9; width: 34px; height: 34px; border-radius: 50%; font-size: 1rem; cursor: pointer; }
+  .fiche h2 { font-size: 1.15rem; margin-bottom: 2px; padding-right: 40px; }
+  .fiche .adresse { color: var(--gris); font-size: .9rem; margin-bottom: 14px; }
+  .fiche .caracs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .fiche .carac { background: #f8fafc; border-radius: 10px; padding: 10px 12px; }
+  .fiche .carac .lbl { font-size: .72rem; text-transform: uppercase; color: var(--gris); letter-spacing: .4px; }
+  .fiche .carac .val { font-weight: 700; font-size: .95rem; }
+  .fiche section h4 { font-size: .82rem; text-transform: uppercase; color: var(--gris); margin: 16px 0 8px; letter-spacing: .4px; }
+
+  /* ---------- SIGNALEMENTS ---------- */
+  .types-signalement { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .types-signalement button {
+    padding: 12px 8px; border: 2px solid #e5e7eb; background: #fff; border-radius: 12px; cursor: pointer;
+    font-size: .85rem; font-weight: 600; transition: all .12s;
+  }
+  .types-signalement button:hover { border-color: var(--vert); background: #f0fdf4; }
+  .types-signalement button.rouge:hover { border-color: var(--rouge); background: #fef2f2; }
+  .confiramtion { background: #dcfce7; border: 1px solid #86efac; color: #166534; padding: 12px; border-radius: 10px; font-size: .9rem; margin-top: 10px; display: none; }
+  .liste-signalements .signalement { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: .85rem; }
+  .signalement .date { color: var(--gris); font-size: .75rem; }
+  .signalement .reponse-communaute { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 12px; margin-top: 8px; font-size: .85rem; }
+
+  .pied { text-align: center; font-size: .78rem; color: var(--gris); padding: 10px; }
+  .pied b { color: var(--vert-fonce); }
+
+  /* ---------- PLANIFICATEUR DE TRAJET ---------- */
+  .fiche.plannificateur { max-width: 640px; }
+  .plannificateur form { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .plannificateur .champ { display: flex; gap: 8px; }
+  .plannificateur .champ label { flex: 1; }
+  .plannificateur input[type="text"], .plannificateur input[type="number"] {
+    width: 100%; padding: 9px 12px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: .95rem; outline: none;
+  }
+  .plannificateur input:focus { border-color: var(--vert); }
+  .plannificateur .deux { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .plannificateur .option-cout {
+    background: #f0fdf4; border: 2px dashed #86efac; border-radius: 12px; padding: 12px;
+    display: flex; gap: 10px; align-items: flex-start; cursor: pointer;
+  }
+  .plannificateur .option-cout input { margin-top: 3px; }
+  .plannificateur .option-cout b { color: var(--vert-fonce); }
+  .plannificateur .resultat { margin-top: 14px; }
+  .plannificateur .resume {
+    background: linear-gradient(135deg, #f0fdf4, #eff6ff); border: 1px solid #bbf7d0; border-radius: 12px;
+    padding: 14px; margin-bottom: 12px; font-size: .92rem;
+  }
+  .plannificateur .resume .gros { font-size: 1.05rem; font-weight: 800; color: var(--vert-fonce); }
+  .plannificateur .resume .economie { color: #b45309; font-weight: 700; }
+  .etape {
+    display: flex; gap: 10px; align-items: flex-start; background: #f8fafc; border-radius: 12px;
+    padding: 10px 12px; margin-bottom: 8px; border-left: 4px solid var(--vert);
+  }
+  .etape.autoroute { border-left-color: #f59e0b; }
+  .etape .num {
+    background: var(--vert); color: #fff; font-weight: 800; width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: .8rem; flex-shrink: 0;
+  }
+  .etape.autoroute .num { background: #f59e0b; }
+  .etape .detail { font-size: .87rem; }
+  .etape .detail b { display: block; }
+  .etape .detail .prix { color: var(--vert-fonce); font-weight: 700; }
+  .avertissement { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 10px; padding: 10px 12px; font-size: .85rem; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">Recharge<span style="font-weight:300">Sereine</span> <span class="eclair">⚡</span></div>
+    <div class="slogan">Bornes signalées par la communauté · prix réels · trajets sereins</div>
+  </div>
+  <span class="badge-beta">VERSION PILOTE — TESTEURS</span>
+</header>
+
+<div class="barre">
+  <input type="text" id="champ-recherche" placeholder="🔎 Une commune (ex : Challans, Nantes, Paris…) puis Entrée" />
+  <button id="btn-rechercher">Rechercher</button>
+  <button id="btn-plannifier" class="secondaire">🧭 Planifier un trajet</button>
+  <button id="btn-geoloc" class="secondaire">📍 Autour de moi</button>
+</div>
+
+<div class="filtres">
+  <label>Puissance min. :
+    <select id="filtre-puissance">
+      <option value="0">Toutes</option>
+      <option value="22">22 kW et +</option>
+      <option value="50">50 kW et + (rapide)</option>
+      <option value="150">150 kW et + (ultra-rapide)</option>
+    </select>
+  </label>
+  <label><input type="checkbox" id="filtre-gratuit" /> Bornes gratuites uniquement</label>
+  <span id="compteur-stations"></span>
+</div>
+
+<div class="contenu">
+  <div id="carte"></div>
+  <div class="panneau-liste">
+    <div class="info-statut" id="info-statut">Chargement des bornes…</div>
+    <div id="liste-stations"></div>
+  </div>
+</div>
+
+<!-- ---------- PLANIFICATEUR DE TRAJET ---------- -->
+<div class="fiche-overlay" id="overlay-plannificateur">
+  <div class="fiche plannificateur" id="plannificateur">
+    <button class="fermer" onclick="fermerPlannificateur()">✕</button>
+    <h2>🧭 Planifier un trajet serein</h2>
+    <div class="adresse">Estimation du coût de recharge et des étapes — pilote</div>
+    <form id="form-trajet" onsubmit="return false;">
+      <div class="champ"><label>Départ : <input type="text" id="trajet-depart" placeholder="Ex : Challans" /></label></div>
+      <div class="champ"><label>Arrivée : <input type="text" id="trajet-arrivee" placeholder="Ex : Paris" /></label></div>
+      <div class="deux">
+        <label>Autonomie restante : <input type="number" id="trajet-autonomie" value="180" min="10" /> km</label>
+        <label>Conso. : <input type="number" id="trajet-conso" value="17" min="8" step="0.5" /> kWh/100km</label>
+      </div>
+      <label class="option-cout">
+        <input type="checkbox" id="trajet-optimiser" checked />
+        <span><b>💸 Optimiser le coût</b> — privilégier les bornes <b>moins chères, y compris hors autoroute</b>, même si ça ajoute quelques minutes de route. <i>(L'option que Google Maps n'a pas !)</i></span>
+      </label>
+      <button type="submit" id="btn-calculer-trajet" style="padding:12px;border:none;border-radius:10px;background:var(--vert);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;">Calculer mon trajet ⚡</button>
+    </form>
+    <div class="resultat" id="resultat-trajet"></div>
+  </div>
+</div>
+
+<!-- ---------- FICHE DÉTAIL D'UNE BORNE ---------- -->
+<div class="fiche-overlay" id="overlay-fiche">
+  <div class="fiche" id="fiche"></div>
+</div>
+
+<div class="pied"><b>RechargeSereine</b> · version pilote testeurs · les signalements sont pour l'instant enregistrés sur votre appareil — la synchronisation communautaire arrive bientôt ⚡</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+"use strict";
+
+/* =========================================================
+   DONNÉES DE DÉMONSTRATION (secours si l'API nationale est indisponible)
+   Stations réalistes autour de Challans (Vendée) + Nantes + Paris
+   ========================================================= */
+const STATIONS_DEMO = [
+  { id: "demo1", enseigne: "Intermarché Challans", adresse: "Rue de la Vendée, 85300 Challans", commune: "CHALLANS", lat: 46.8489, lon: -1.7986, pdc: 2, puissance: 22, tarification: "0,35 €/kWh", gratuit: false, paiement: "Badge, CB", horaires: "24h/24", type: "Type 2", observations: "" },
+  { id: "demo2", enseigne: "Lidl Challans", adresse: "Boulevard Aristide Briand, 85300 Challans", commune: "CHALLANS", lat: 46.8521, lon: -1.7958, pdc: 4, puissance: 22, tarification: "Gratuit pendant 1h d'achat", gratuit: true, paiement: "Gratuit", horaires: "Lundi–samedi 8h30–20h", type: "Type 2 (combo)", observations: "2 prises bloquées par des voitures thermiques le samedi" },
+  { id: "demo3", enseigne: "Super U Challans", adresse: "Route de La Roche-sur-Yon, 85300 Challans", commune: "CHALLANS", lat: 46.8398, lon: -1.7874, pdc: 2, puissance: 50, tarification: "0,45 €/kWh", gratuit: false, paiement: "CB", horaires: "24h/24", type: "Combo CCS", observations: "" },
+  { id: "demo4", enseigne: "Mairie de Challans", adresse: "Place de la Mairie, 85300 Challans", commune: "CHALLANS", lat: 46.8496, lon: -1.7950, pdc: 2, puissance: 22, tarification: "Gratuit", gratuit: true, paiement: "Gratuit", horaires: "24h/24", type: "Type 2", observations: "" },
+  { id: "demo5", enseigne: "Fastned A83 aire de Challans", adresse: "A83 aire des Herbiers, 85260 Les Herbiers", commune: "LES HERBIERS", lat: 46.8694, lon: -1.0178, pdc: 6, puissance: 150, tarification: "0,59 €/kWh", gratuit: false, paiement: "CB, badge, appli", horaires: "24h/24", type: "Combo CCS, CHAdeMO", observations: "Chère — moins cher en sortant à l'échangeur" },
+  { id: "demo6", enseigne: "Electra Nantes Nord", adresse: "Route de Vannes, 44300 Nantes", commune: "NANTES", lat: 47.2489, lon: -1.5719, pdc: 8, puissance: 200, tarification: "0,39 €/kWh", gratuit: false, paiement: "CB, appli", horaires: "24h/24", type: "Combo CCS", observations: "" },
+  { id: "demo7", enseigne: "Ionity Nantes Atlantis", adresse: "Rue des Sorinières, 44800 Saint-Herblain", commune: "SAINT-HERBLAIN", lat: 47.1886, lon: -1.6247, pdc: 6, puissance: 350, tarification: "0,69 €/kWh", gratuit: false, paiement: "CB, badge", horaires: "24h/24", type: "Combo CCS", observations: "" },
+  { id: "demo8", enseigne: "Centre commercial Beaulieu", adresse: "Rue du Général Buat, 44000 Nantes", commune: "NANTES", lat: 47.2195, lon: -1.5627, pdc: 4, puissance: 22, tarification: "0,29 €/kWh", gratuit: false, paiement: "Badge", horaires: "7h–23h", type: "Type 2", observations: "" },
+  { id: "demo9", enseigne: "TotalEnergies Paris La Défense", adresse: "Parvis de la Défense, 92800 Puteaux", commune: "PUTEAUX", lat: 48.8877, lon: 2.2393, pdc: 12, puissance: 175, tarification: "0,54 €/kWh", gratuit: false, paiement: "CB, badge", horaires: "24h/24", type: "Combo CCS", observations: "" },
+  { id: "demo10", enseigne: "Belib Paris — rue de Rivoli", adresse: "150 rue de Rivoli, 75001 Paris", commune: "PARIS", lat: 48.8617, lon: 2.3584, pdc: 2, puissance: 22, tarification: "Gratuit (2h max)", gratuit: true, paiement: "Badge", horaires: "24h/24", type: "Type 2", observations: "Souvent occupées en journée" },
+  { id: "demo11", enseigne: "Tesla Supercharger Falaise", adresse: "ZA du Bois de l'Hôpital, 14100 Falaise", commune: "FALAISE", lat: 48.8946, lon: -0.3653, pdc: 8, puissance: 250, tarification: "0,42 €/kWh", gratuit: false, paiement: "CB, appli Tesla", horaires: "24h/24", type: "Combo CCS", observations: "" },
+  { id: "demo12", enseigne: "Leclerc La Roche-sur-Yon", adresse: "Rue du Mandin, 85000 La Roche-sur-Yon", commune: "LA ROCHE-SUR-YON", lat: 46.6666, lon: -1.4318, pdc: 4, puissance: 50, tarification: "0,38 €/kWh", gratuit: false, paiement: "CB, badge", horaires: "24h/24", type: "Combo CCS, Type 2", observations: "" }
+];
+
+/* =========================================================
+   ÉTAT DE L'APPLICATION
+   ========================================================= */
+let stations = [];          // stations actuellement affichées (format normalisé)
+let carte = null;           // instance Leaflet
+let marqueurs = [];         // marqueurs Leaflet courants
+let modeDemo = false;       // true = données de secours affichées
+
+const CLES_SIGNALEMENTS = "rechargesereine_signalements";
+
+/* =========================================================
+   SIGNALEMENTS COMMUNAUTAIRES (stockage local dans cette version pilote)
+   ========================================================= */
+function lireSignalements() {
+  try { return JSON.parse(localStorage.getItem(CLES_SIGNALEMENTS) || "[]"); }
+  catch (e) { return []; }
+}
+function enregistrerSignalement(s) {
+  const liste = lireSignalements();
+  liste.push(s);
+  localStorage.setItem(CLES_SIGNALEMENTS, JSON.stringify(liste));
+}
+function signalementsDe(idStation) {
+  return lireSignalements().filter(s => s.station === idStation);
+}
+function formaterDate(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString("fr-FR") + " à " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+const TYPES_SIGNALEMENT = {
+  hors_service:  { libelle: "🔌 Borne hors service", gravite: "rouge" },
+  cable:         { libelle: "🧵 Câble absent ou endommagé", gravite: "rouge" },
+  occupe:        { libelle: "⏳ Toutes les prises occupées", gravite: "orange" },
+  thermique:     { libelle: "🚗 Bloquée par un thermique", gravite: "orange" },
+  tarif:         { libelle: "💸 Tarif incorrect", gravite: "bleu" },
+  ok:            { libelle: "✅ Borne fonctionnelle (confirmé)", gravite: "vert" }
+};
+
+/* =========================================================
+   ACCÈS AUX DONNÉES — API NATIONALE (ODRÉ / open data IRVE)
+   ========================================================= */
+const API_BASE = "https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/bornes-irve/records";
+
+// Requête résiliente : route directe, puis relais publics si le réseau bloque le serveur de l'État
+async function apiFetch(url) {
+  // 1) route directe (la plus rapide quand le réseau l'autorise)
+  try {
+    const r = await fetch(url);
+    if (r.ok) return await r.json();
+  } catch (e) { /* réseau bloqué : on tente les relais */ }
+  // 2) relais public n°1 : allorigins
+  try {
+    const rep = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
+    if (rep.ok) return await rep.json();
+  } catch (e) { /* relais suivant */ }
+  // 3) relais public n°2 : r.jina.ai (renvoie le JSON noyé dans du texte, on l'extrait)
+  try {
+    const rep = await fetch("https://r.jina.ai/" + url);
+    if (rep.ok) {
+      const txt = await rep.text();
+      const debut = txt.indexOf('{"total_count"');
+      if (debut !== -1) return JSON.parse(txt.slice(debut));
+    }
+  } catch (e) { /* relais suivant */ }
+  // 4) relais public n°3 : codetabs
+  try {
+    const rep = await fetch("https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url));
+    if (rep.ok) return await rep.json();
+  } catch (e) { /* aucun relais disponible */ }
+  throw new Error("injoignable");
+}
+
+function normaliserApi(r) {
+  const f = r || {};
+  const lat = f.consolidated_latitude, lon = f.consolidated_longitude;
+  return {
+    id: (f.id_pdc_itinerance || f.id_station_local || f.nom_station || "borne") + "_" + (lon || 0) + "_" + (lat || 0),
+    enseigne: f.nom_enseigne || f.nom_station || f.nom_operateur || "Borne de recharge",
+    adresse: f.adresse_station || "",
+    commune: (f.consolidated_commune || "").toUpperCase(),
+    lat: typeof lat === "number" ? lat : null,
+    lon: typeof lon === "number" ? lon : null,
+    pdc: parseInt(f.nbre_pdc) || 1,
+    puissance: parseFloat(f.puissance_nominale) || 0,
+    tarification: f.tarification || "Non communiqué",
+    gratuit: (f.tarification || "").toLowerCase().includes("gratuit") || f.gratuit === "true" || f.gratuit === "TRUE",
+    paiement: f.paiement_cb === "TRUE" ? "CB acceptée" : (f.paiement_acte === "TRUE" ? "Paiement à l'acte" : (f.paiement_autre ? f.paiement_autre : "Voir opérateur")),
+    horaires: f.horaires || "Non communiqué",
+    type: [f.prise_type_2 === "TRUE" && "Type 2", f.prise_type_combo_ccs === "TRUE" && "Combo CCS", f.prise_type_chademo === "TRUE" && "CHAdeMO", f.prise_type_ef === "TRUE" && "EF (prise domicile)"].filter(Boolean).join(", ") || "—",
+    observations: f.observations || ""
+  };
+}
+
+async function chercherParCommune(nomCommune) {
+  // Champ réel de la base : consolidated_commune. LIKE est insensible à la casse.
+  const nom = nomCommune.trim().replace(/'/g, "''");
+  const variantes = [
+    '?limit=300&where=consolidated_commune%20LIKE%20%22' + encodeURIComponent(nom + "%") + '%22',
+    '?limit=300&where=consolidated_commune%20LIKE%20%22' + encodeURIComponent(nom) + '%22',
+    '?limit=300&where=search(nom_station)%20%3D%3D%20%22' + encodeURIComponent(nomCommune.trim()) + '%22'
+  ];
+  for (const v of variantes) {
+    try {
+      const data = await apiFetch(API_BASE + v);
+      if (data.results && data.results.length) {
+        return data.results.map(normaliserApi).filter(s => s.lat !== null);
+      }
+    } catch (e) { /* on essaie la variante suivante */ }
+  }
+  return [];
+}
+
+async function chercherAutour(lat, lon, rayonKm) {
+  // Recherche par rectangle englobant (fonctionne sur les champs consolidated_latitude/longitude)
+  const dLat = rayonKm / 111, dLon = rayonKm / (111 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+  const url = API_BASE + '?limit=300&where=consolidated_latitude%20%3E%20' + (lat - dLat) +
+    '%20AND%20consolidated_latitude%20%3C%20' + (lat + dLat) +
+    '%20AND%20consolidated_longitude%20%3E%20' + (lon - dLon) +
+    '%20AND%20consolidated_longitude%20%3C%20' + (lon + dLon);
+  const data = await apiFetch(url);
+  // on garde les bornes vraiment dans le rayon (cercle, pas le carré)
+  return data.results.map(normaliserApi).filter(s => s.lat !== null && distanceKm(lat, lon, s.lat, s.lon) <= rayonKm);
+}
+
+/* =========================================================
+   RENDU DE LA CARTE
+   ========================================================= */
+function couleurMarqueur(puissance) {
+  if (puissance >= 150) return "#7c3aed";
+  if (puissance >= 50) return "#0284c7";
+  if (puissance >= 22) return "#16a34a";
+  return "#6b7280";
+}
+function marqueurPresent(s) {
+  const signalements = signalementsDe(s.id);
+  return signalements.some(sig => sig.type === "hors_service" || sig.type === "cable");
+}
+
+function dessinerMarqueurs() {
+  if (!carte) return;
+  marqueurs.forEach(m => carte.removeLayer(m));
+  marqueurs = [];
+  stations.forEach(s => {
+    const hs = marqueurPresent(s);
+    const icone = L.divIcon({
+      className: "",
+      html: '<div style="width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);' +
+        'background:' + (hs ? "#dc2626" : couleurMarqueur(s.puissance)) + ';border:2px solid #fff;' +
+        'box-shadow:0 2px 6px rgba(0,0,0,.35);"></div>',
+      iconSize: [22, 22], iconAnchor: [11, 22]
+    });
+    const m = L.marker([s.lat, s.lon], { icon: icone }).addTo(carte);
+    m.on("click", () => ouvrirFiche(s));
+    marqueurs.push(m);
+  });
+}
+
+function centrerCarte() {
+  if (!carte || !stations.length) return;
+  const lats = stations.map(s => s.lat), lons = stations.map(s => s.lon);
+  carte.fitBounds([[Math.min(...lats), Math.min(...lons)], [Math.max(...lats), Math.max(...lons)]], { padding: [40, 40], maxZoom: 14 });
+}
+
+/* =========================================================
+   RENDU DE LA LISTE
+   ========================================================= */
+function etiquettePuissance(p) {
+  if (p >= 150) return "⚡ " + p + " kW";
+  if (p >= 50) return p + " kW";
+  if (p >= 22) return p + " kW";
+  return p ? p + " kW" : "puissance n.c.";
+}
+
+function renduListe() {
+  const conteneur = document.getElementById("liste-stations");
+  const filtrePuissance = parseFloat(document.getElementById("filtre-puissance").value);
+  const filtreGratuit = document.getElementById("filtre-gratuit").checked;
+  const visibles = stations.filter(s =>
+    s.puissance >= filtrePuissance &&
+    (!filtreGratuit || s.gratuit)
+  );
+  document.getElementById("compteur-stations").textContent = visibles.length + " borne(s) affichée(s)";
+  if (!visibles.length) {
+    conteneur.innerHTML = '<div class="station"><h3>Aucune borne ne correspond à ces filtres</h3><div class="commune">Essayez d\'élargir la puissance ou de décocher « gratuites uniquement ».</div></div>';
+    return;
+  }
+  conteneur.innerHTML = visibles.map(s => {
+    const hs = marqueurPresent(s);
+    return '<div class="station" data-id="' + s.id + '">' +
+      '<h3>' + (hs ? "🚨 " : "") + s.enseigne + '</h3>' +
+      '<div class="commune">' + s.commune + '</div>' +
+      '<div class="etiquettes">' +
+        '<span class="etq puissance">' + etiquettePuissance(s.puissance) + '</span>' +
+        '<span class="etq pdc">' + s.pdc + ' point' + (s.pdc > 1 ? "s" : "") + '</span>' +
+        (s.gratuit ? '<span class="etq gratuit">GRATUIT</span>' : (s.tarification && s.tarification !== "Non communiqué" ? '<span class="etq tarif">' + s.tarification + '</span>' : "")) +
+        (hs ? '<span class="etq hors-service">SIGNALÉE HS</span>' : "") +
+      '</div></div>';
+  }).join("");
+  conteneur.querySelectorAll(".station").forEach(el => {
+    el.addEventListener("click", () => {
+      const s = visibles.find(v => v.id === el.dataset.id);
+      if (s) ouvrirFiche(s);
+    });
+  });
+}
+
+/* =========================================================
+   FICHE DÉTAIL + SIGNALEMENT
+   ========================================================= */
+function fermerFiche() {
+  document.getElementById("overlay-fiche").classList.remove("ouvert");
+}
+
+function ouvrirFiche(s) {
+  const fiche = document.getElementById("fiche");
+  const signalements = signalementsDe(s.id).slice().reverse();
+  const hs = marqueurPresent(s);
+  fiche.innerHTML =
+    '<button class="fermer" onclick="fermerFiche()">✕</button>' +
+    '<h2>' + (hs ? "🚨 " : "") + s.enseigne + '</h2>' +
+    '<div class="adresse">' + (s.adresse || s.commune) + '</div>' +
+    '<div class="caracs">' +
+      '<div class="carac"><div class="lbl">Puissance</div><div class="val">' + (s.puissance || "n.c.") + ' kW</div></div>' +
+      '<div class="carac"><div class="lbl">Points de charge</div><div class="val">' + s.pdc + '</div></div>' +
+      '<div class="carac"><div class="lbl">Tarif</div><div class="val">' + (s.gratuit ? "Gratuit 🎉" : (s.tarification || "n.c.")) + '</div></div>' +
+      '<div class="carac"><div class="lbl">Paiement</div><div class="val">' + s.paiement + '</div></div>' +
+      '<div class="carac"><div class="lbl">Horaires</div><div class="val">' + s.horaires + '</div></div>' +
+      '<div class="carac"><div class="lbl">Prises</div><div class="val">' + s.type + '</div></div>' +
+    '</div>' +
+    (s.observations ? '<section><h4>ℹ️ À savoir</h4><div style="font-size:.9rem">' + s.observations + '</div></section>' : "") +
+
+    '<section><h4>🚨 Signaler un problème — la communauté vous remercie</h4>' +
+      '<div class="types-signalement">' +
+        '<button class="rouge" data-type="hors_service">🔌 Borne hors service</button>' +
+        '<button class="rouge" data-type="cable">🧵 Câble absent / endommagé</button>' +
+        '<button data-type="occupe">⏳ Prises occupées</button>' +
+        '<button data-type="thermique">🚗 Bloquée (thermique)</button>' +
+        '<button data-type="tarif">💸 Tarif incorrect</button>' +
+        '<button data-type="ok">✅ Borne fonctionnelle</button>' +
+      '</div>' +
+      '<div class="confiramtion" id="confirmation-signalement">Merci ! Votre signalement est enregistré — il apparaît désormais pour les autres conducteurs. ⚡</div>' +
+    '</section>' +
+
+    '<section class="liste-signalements"><h4>👀 Signalements récents (' + signalements.length + ')</h4>' +
+      (signalements.length
+        ? signalements.map(sig =>
+            '<div class="signalement"><b>' + (TYPES_SIGNALEMENT[sig.type] ? TYPES_SIGNALEMENT[sig.type].libelle : sig.type) + '</b>' +
+            '<div>« ' + (sig.commentaire || "Pas de commentaire") + ' »</div>' +
+            '<div class="date">Signalé le ' + formaterDate(sig.date) + '</div></div>'
+          ).join("")
+        : '<div style="font-size:.88rem;color:var(--gris)">Aucun signalement pour cette borne — soyez le premier à informer la communauté !</div>') +
+    '</section>';
+
+  fiche.querySelectorAll(".types-signalement button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const commentaire = prompt("Un détail à ajouter ? (optionnel — ex : « écranHS, 3e borne »)") || "";
+      enregistrerSignalement({ station: s.id, type: btn.dataset.type, commentaire: commentaire.trim(), date: Date.now() });
+      document.getElementById("confirmation-signalement").style.display = "block";
+      renduListe();
+      dessinerMarqueurs();
+      setTimeout(() => ouvrirFiche(s), 900); // rafraîchit la fiche avec le nouveau signalement
+    });
+  });
+
+  document.getElementById("overlay-fiche").classList.add("ouvert");
+}
+document.getElementById("overlay-fiche").addEventListener("click", e => {
+  if (e.target === document.getElementById("overlay-fiche")) fermerFiche();
+});
+
+/* =========================================================
+   CHARGEMENT DES STATIONS (API → secours démo)
+   ========================================================= */
+function afficherStations(liste, statutHtml, demo) {
+  stations = liste;
+  modeDemo = demo;
+  document.getElementById("info-statut").innerHTML = statutHtml;
+  renduListe();
+  dessinerMarqueurs();
+  centrerCarte();
+}
+
+async function chargerCommune(nom) {
+  const statut = document.getElementById("info-statut");
+  statut.innerHTML = "🔎 Recherche des bornes à <b>" + nom + "</b>…";
+
+  // 1) Recherche directe dans la base nationale
+  let liste = [];
+  try { liste = await chercherParCommune(nom); } catch (e) { liste = []; }
+
+  // 2) Aucun résultat direct → on localise la commune et on cherche dans un rayon de 25 km
+  if (!liste.length) {
+    const ville = await localiserVille(nom);
+    if (ville) {
+      statut.innerHTML = "🔎 Bornes autour de <b>" + ville.nom + "</b> (rayon 25 km)…";
+      try { liste = await chercherAutour(ville.lat, ville.lon, 25); } catch (e) { liste = []; }
+    }
+  }
+
+  // 3) Résultat : données officielles, ou message honnête + démo
+  if (liste.length) {
+    afficherStations(liste, "<b>" + liste.length + " borne(s)</b> trouvées pour " + nom + " — données officielles (Base nationale IRVE) ✅", false);
+    return;
+  }
+  const demo = STATIONS_DEMO.filter(s => s.commune === nom.toUpperCase());
+  if (demo.length) {
+    afficherStations(demo, "⚠️ Base nationale injoignable pour l'instant — <b>bornes de démonstration</b> pour " + nom + ". Réessayez plus tard.", true);
+  } else {
+    chargerDemo("⚠️ <b>Impossible de joindre la base nationale pour « " + nom + " »</b> (serveur de données de l'État saturé ou accès bloqué). Voici les bornes de démonstration — le signalement et le planificateur restent utilisables. Réessayez dans quelques minutes.");
+  }
+}
+
+async function chargerAutour(lat, lon) {
+  const statut = document.getElementById("info-statut");
+  statut.innerHTML = "📍 Recherche des bornes autour de vous…";
+  try {
+    const liste = await chercherAutour(lat, lon, 20);
+    if (!liste.length) throw new Error("aucun résultat");
+    afficherStations(liste, "<b>" + liste.length + " borne(s)</b> à moins de 20 km — données officielles (Base nationale IRVE)", false);
+  } catch (e) {
+    chargerDemo("⚠️ API nationale momentanément inaccessible — <b>données de démonstration</b> (aucune position réelle utilisée).");
+  }
+}
+
+function chargerDemo(message) {
+  afficherStations(STATIONS_DEMO, message, true);
+}
+
+/* =========================================================
+   PLANIFICATEUR DE TRAJET — routing économique (option hors autoroute)
+   ========================================================= */
+const VILLES_CONNUES = {
+  "challans": [46.849, -1.796], "nantes": [47.218, -1.553], "paris": [48.857, 2.352],
+  "la roche-sur-yon": [46.670, -1.429], "les herbiers": [46.870, -1.013],
+  "rennes": [48.117, -1.677], "bordeaux": [44.838, -0.579], "lyon": [45.764, 4.836],
+  "marseille": [43.296, 5.370], "lille": [50.633, 3.066], "toulouse": [43.605, 1.444],
+  "angers": [47.473, -0.554], "tours": [47.394, 0.685], "niort": [46.324, -0.460],
+  "saint-nazaire": [47.273, -2.214], "vannes": [47.659, -2.760], "rouen": [49.443, 1.099],
+  "strasbourg": [48.573, 7.752], "dijon": [47.322, 5.041], "clermont-ferrand": [45.777, 3.087],
+  "saint-herblain": [47.188, -1.624], "puteaux": [48.887, 2.239], "falaise": [48.894, -0.365],
+  "les sables-d'olonnes": [46.494, -1.490]
+};
+const PRIX_AUTOROUTE = 0.69;   // €/kWh — référence aires d'autoroute rapides
+const FACTEUR_ROUTE = 1.25;     // distance route ≈ 1,25 × distance à vol d'oiseau
+
+function fermerPlannificateur() { document.getElementById("overlay-plannificateur").classList.remove("ouvert"); }
+
+function distanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function localiserVilleSync(nom) {
+  // Retourne une ville connue sans appel réseau (liste pilote)
+  const cle = nom.trim().toLowerCase();
+  if (VILLES_CONNUES[cle]) return { nom: nom.trim(), lat: VILLES_CONNUES[cle][0], lon: VILLES_CONNUES[cle][1] };
+  const st = stations.concat(STATIONS_DEMO).find(s => (s.commune || "").toLowerCase() === cle);
+  if (st) return { nom: nom.trim(), lat: st.lat, lon: st.lon };
+  return null;
+}
+
+async function localiserVille(nom) {
+  // 1) Liste locale instantanée
+  const direct = localiserVilleSync(nom);
+  if (direct) return direct;
+  // 2) Géocodage Nominatim (OpenStreetMap) — n'importe quelle commune de France
+  try {
+    const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=fr&q=" + encodeURIComponent(nom);
+    const reponse = await fetch(url, { headers: { "Accept-Language": "fr" } });
+    if (reponse.ok) {
+      const data = await reponse.json();
+      if (data.length) return { nom: nom.trim(), lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    }
+  } catch (e) { /* pas de réseau : on retombe sur la liste */ }
+  // 3) Tentative sans accents/avec tirets normalisés dans la liste
+  const normalise = s => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[-' ]/g, "");
+  const cleN = normalise(nom);
+  const cleTrouvee = Object.keys(VILLES_CONNUES).find(k => normalise(k) === cleN);
+  if (cleTrouvee) return { nom: nom.trim(), lat: VILLES_CONNUES[cleTrouvee][0], lon: VILLES_CONNUES[cleTrouvee][1] };
+  return null;
+}
+
+function extrairePrix(s) {
+  // Retourne un prix €/kWh estimé à partir du champ tarification
+  if (s.gratuit) return 0;
+  const m = (s.tarification || "").match(/(\d+[.,]?\d*)\s*€?\s*\/\s*kwh/i);
+  if (m) return parseFloat(m[1].replace(",", "."));
+  if (s.puissance >= 100) return 0.55;
+  if (s.puissance >= 50) return 0.45;
+  return 0.35;
+}
+
+async function calculerTrajet() {
+  document.getElementById("resultat-trajet").innerHTML = '<div style="margin-top:12px;font-size:.9rem;color:var(--gris)">🔎 Localisation des villes…</div>';
+  const depart = await localiserVille(document.getElementById("trajet-depart").value);
+  const arrivee = await localiserVille(document.getElementById("trajet-arrivee").value);
+  const autonomie = parseFloat(document.getElementById("trajet-autonomie").value) || 180;
+  const conso = (parseFloat(document.getElementById("trajet-conso").value) || 17) / 100; // kWh/km
+  const optimiser = document.getElementById("trajet-optimiser").checked;
+  const sortie = document.getElementById("resultat-trajet");
+
+  if (!depart || !arrivee) {
+    sortie.innerHTML = '<div class="avertissement">⚠️ Ville non reconnue pour l\'instant (version pilote). Essayez par exemple : Challans, Nantes, Paris, La Roche-sur-Yon, Rennes, Bordeaux, Lyon…</div>';
+    return;
+  }
+
+  const distanceTotale = Math.round(distanceKm(depart.lat, depart.lon, arrivee.lat, arrivee.lon) * FACTEUR_ROUTE);
+  const kWhTotal = Math.round(distanceTotale * conso);
+
+  // Candidates : toutes les bornes chargées + démo, dans un couloir de 40 km autour de la ligne
+  const candidats = stations.concat(STATIONS_DEMO.filter(d => !stations.some(s => s.id === d.id)))
+    .filter(s => !marqueurPresent(s)) // on écarte les bornes signalées HS 🎯
+    .filter(s => {
+      const total = distanceKm(depart.lat, depart.lon, s.lat, s.lon) + distanceKm(s.lat, s.lon, arrivee.lat, arrivee.lon);
+      return total <= distanceTotale / FACTEUR_ROUTE + 40;
+    });
+
+  // Stratégie : si le trajet dépasse l'autonomie, on propose des étapes
+  const etapes = [];
+  const dejaUtilisees = new Set();
+  let position = depart, restant = distanceTotale, autonomieRestante = autonomie;
+  let securite = 0;
+  while (restant > autonomieRestante && securite < 8) {
+    securite++;
+    // Bornes atteignables, PAS déjà utilisées, et qui FONT PROGRESSER vers l'arrivée
+    let atteignables = candidats.filter(s => {
+      if (dejaUtilisees.has(s.id)) return false;
+      const dPosition = distanceKm(position.lat, position.lon, s.lat, s.lon);
+      if (dPosition > autonomieRestante * 0.9) return false;
+      // la borne doit nous rapprocher de l'arrivée (sinon on tourne en rond)
+      const dAvant = distanceKm(position.lat, position.lon, arrivee.lat, arrivee.lon);
+      const dApres = distanceKm(s.lat, s.lon, arrivee.lat, arrivee.lon);
+      return dApres < dAvant - 1;
+    });
+    if (!atteignables.length) {
+      if (etapes.length) {
+        etapes.eteinte = true; // marqueur interne : itinéraire incomplet
+      }
+      break;
+    }
+    if (optimiser) {
+      // parmi les bornes qui font bien avancer (les 40% les plus proches de l'arrivée), la moins chère — mais jamais plus de 25% de détour sur le prix autoroute si elle est lente
+      atteignables.sort((a, b) => distanceKm(a.lat, a.lon, arrivee.lat, arrivee.lon) - distanceKm(b.lat, b.lon, arrivee.lat, arrivee.lon));
+      atteignables = atteignables.slice(0, Math.max(3, Math.ceil(atteignables.length * 0.4)));
+      atteignables.sort((a, b) => extrairePrix(a) - extrairePrix(b));
+    } else {
+      // mode classique : la plus puissante parmi celles qui avancent le plus
+      atteignables.sort((a, b) => (b.puissance - a.puissance) || (distanceKm(a.lat, a.lon, arrivee.lat, arrivee.lon) - distanceKm(b.lat, b.lon, arrivee.lat, arrivee.lon)));
+    }
+    const choix = atteignables[0];
+    dejaUtilisees.add(choix.id);
+    const dEffectuee = Math.round(distanceKm(position.lat, position.lon, choix.lat, choix.lon) * FACTEUR_ROUTE);
+    etapes.push({ station: choix, kmDepuis: dEffectuee });
+    position = choix;
+    restant -= dEffectuee;
+    autonomieRestante = Math.min(400, (choix.puissance >= 50 ? 350 : 200)); // recharge jusqu'à ~80% en pilot
+  }
+
+  // Estimation du coût
+  const coutParEtape = etapes.map(e => ({
+    ...e,
+    prix: extrairePrix(e.station),
+    kwh: Math.max(1, Math.round((e.kmDepuis || 0) * conso))
+  }));
+  const coutTotal = coutParEtape.reduce((t, e) => t + e.kwh * (e.prix || 0), 0);
+  const coutAutoroute = kWhTotal * PRIX_AUTOROUTE;
+  const economie = Math.max(0, coutAutoroute - coutTotal);
+
+  sortie.innerHTML =
+    '<div class="resume">' +
+      '<div class="gros">' + depart.nom + ' → ' + arrivee.nom + ' : ~' + distanceTotale + ' km</div>' +
+      'Énergie estimée : <b>' + kWhTotal + ' kWh</b> · ' +
+      (etapes.length ? '<b>' + etapes.length + ' recharge' + (etapes.length > 1 ? 's' : '') + '</b> recommandée' + (etapes.length > 1 ? 's' : '') : 'Aucune recharge nécessaire 🎉') + ' · ' +
+      'Coût estimé : <b>' + coutTotal.toFixed(1).replace(".", ",") + ' €</b>' +
+      (economie > 1 ? ' · <span class="economie">≈ ' + economie.toFixed(1).replace(".", ",") + ' € économisés vs autoroute</span>' : '') +
+    '</div>' +
+    (optimiser && etapes.length
+      ? '<div style="font-size:.82rem;color:var(--gris);margin-bottom:8px">💸 Mode <b>optimiser le coût</b> : bornes hors autoroute privilégiées quand elles sont moins chères.</div>'
+      : (etapes.length ? '<div style="font-size:.82rem;color:var(--gris);margin-bottom:8px">⚡ Mode rapide : bornes les plus puissantes privilégiées.</div>' : '')) +
+    coutParEtape.map((e, i) =>
+      '<div class="etape' + (e.prix >= PRIX_AUTOROUTE ? " autoroute" : "") + '">' +
+        '<div class="num">' + (i + 1) + '</div>' +
+        '<div class="detail"><b>' + e.station.enseigne + '</b>' +
+          '<span>' + e.station.commune + ' · ' + e.station.puissance + ' kW · +~' + e.kmDepuis + ' km depuis l\'étape précédente</span><br>' +
+          'Recharge estimée : ' + e.kwh + ' kWh à <span class="prix">' + (e.prix === 0 ? "GRATUIT 🎉" : String(e.prix).replace(".", ",") + " €/kWh ≈ " + (e.kwh * e.prix).toFixed(1).replace(".", ",") + " €") + '</span>' +
+        '</div></div>'
+    ).join("") +
+    (etapes.length
+      ? '<div class="avertissement">ℹ️ Version pilote : le planificateur choisit parmi les bornes <b>affichées à l\'écran</b>. Pour un long trajet, recherchez d\'abord les grandes villes de votre itinéraire (ex : Nantes, Bordeaux, Toulouse…) pour enrichir les étapes proposées.</div>'
+      : '<div class="avertissement">✅ Votre autonomie (' + autonomie + ' km) couvre ce trajet. Pensez tout de même à vérifier une borne de secours à l\'arrivée !</div>');
+
+  // Tracé du trajet sur la carte
+  if (carte) {
+    if (typeof ligneTrajet !== "undefined" && ligneTrajet) carte.removeLayer(ligneTrajet);
+    window.ligneTrajet = L.polyline([[depart.lat, depart.lon], ...etapes.map(e => [e.station.lat, e.station.lon]), [arrivee.lat, arrivee.lon]], { color: "#0284c7", weight: 4, dashArray: "8 8" }).addTo(carte);
+    carte.fitBounds(window.ligneTrajet.getBounds(), { padding: [50, 50] });
+  }
+}
+
+/* =========================================================
+   INITIALISATION
+   ========================================================= */
+function initCarte() {
+  if (typeof L === "undefined") {
+    document.getElementById("carte").innerHTML =
+      '<div style="padding:30px;text-align:center;color:#6b7280;font-size:.9rem">' +
+      '🗺️ La carte interactive s\'affichera sur la version en ligne.<br><br>' +
+      'En attendant, utilisez la liste de bornes à droite →</div>';
+    return null;
+  }
+  const c = L.map("carte").setView([46.85, -1.8], 10); // Challans par défaut
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "© OpenStreetMap"
+  }).addTo(c);
+  return c;
+}
+
+function init() {
+  carte = initCarte();
+  chargerDemo("👋 <b>Bienvenue testeur !</b> Recherchez une commune (ex : Challans, Nantes, Paris) pour afficher les bornes officielles de la base nationale IRVE. Ces bornes de démonstration vous permettent déjà d'explorer l'application.");
+
+  document.getElementById("btn-rechercher").addEventListener("click", () => {
+    const q = document.getElementById("champ-recherche").value.trim();
+    if (q) chargerCommune(q);
+  });
+  document.getElementById("champ-recherche").addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      const q = e.target.value.trim();
+      if (q) chargerCommune(q);
+    }
+  });
+  document.getElementById("btn-geoloc").addEventListener("click", () => {
+    if (!navigator.geolocation) return chargerDemo("📍 La géolocalisation n'est pas disponible sur cet appareil.");
+    navigator.geolocation.getCurrentPosition(
+      pos => chargerAutour(pos.coords.latitude, pos.coords.longitude),
+      () => chargerDemo("📍 Géolocalisation refusée — recherchez une commune avec son nom.")
+    );
+  });
+  document.getElementById("filtre-puissance").addEventListener("change", renduListe);
+  document.getElementById("filtre-gratuit").addEventListener("change", renduListe);
+  document.getElementById("btn-plannifier").addEventListener("click", () => {
+    document.getElementById("overlay-plannificateur").classList.add("ouvert");
+  });
+  document.getElementById("form-trajet").addEventListener("submit", e => { e.preventDefault(); calculerTrajet(); });
+  document.getElementById("btn-calculer-trajet").addEventListener("click", calculerTrajet);
+  document.getElementById("overlay-plannificateur").addEventListener("click", e => {
+    if (e.target === document.getElementById("overlay-plannificateur")) fermerPlannificateur();
+  });
+}
+
+init();
+</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" nonce="OHFtoCoNMZZXQcfKGOhU6w==" data-cf-beacon='{"version":"2024.11.0","token":"36b4216ae2dc4d5488c249161e71fe1e","spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
