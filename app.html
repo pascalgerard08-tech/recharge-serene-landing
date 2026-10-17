@@ -300,22 +300,30 @@ const API_BASE = "https://odre.opendatasoft.com/api/explore/v2.1/catalog/dataset
 
 // Requête résiliente : route directe, puis relais publics si le réseau bloque le serveur de l'État
 async function apiFetch(url) {
+  // 1) route directe (la plus rapide quand le réseau l'autorise)
   try {
     const r = await fetch(url);
     if (r.ok) return await r.json();
   } catch (e) { /* réseau bloqué : on tente les relais */ }
-  const relais = [
-    "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
-    "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url)
-  ];
-  for (const r of relais) {
-    try {
-      const rep = await fetch(r);
-      if (!rep.ok) continue;
+  // 2) relais public n°1 : allorigins
+  try {
+    const rep = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
+    if (rep.ok) return await rep.json();
+  } catch (e) { /* relais suivant */ }
+  // 3) relais public n°2 : r.jina.ai (renvoie le JSON noyé dans du texte, on l'extrait)
+  try {
+    const rep = await fetch("https://r.jina.ai/" + url);
+    if (rep.ok) {
       const txt = await rep.text();
-      return JSON.parse(txt);
-    } catch (e) { /* relais suivant */ }
-  }
+      const debut = txt.indexOf('{"total_count"');
+      if (debut !== -1) return JSON.parse(txt.slice(debut));
+    }
+  } catch (e) { /* relais suivant */ }
+  // 4) relais public n°3 : codetabs
+  try {
+    const rep = await fetch("https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url));
+    if (rep.ok) return await rep.json();
+  } catch (e) { /* aucun relais disponible */ }
   throw new Error("injoignable");
 }
 
