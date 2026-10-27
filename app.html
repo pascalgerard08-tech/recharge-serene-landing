@@ -635,7 +635,7 @@ async function chargerCommune(nom) {
 
   // 3) Résultat : données officielles, ou réserve intégrée, ou démo
   if (liste.length) {
-    afficherStations(liste, "<b>" + liste.length + " borne(s)</b> trouvées pour " + nom + " — données officielles (Base nationale IRVE) ✅", false);
+    afficherStations(liste, "🟢 <b>Données en direct</b> — " + liste.length + " borne(s) trouvées pour " + nom + " (Base nationale IRVE, toutes puissances, mises à jour en temps réel) ✅", false);
     return;
   }
   let reserve = bornesOffline(nom);
@@ -643,12 +643,12 @@ async function chargerCommune(nom) {
     // Commune sans borne intégrée : bornes officielles à moins de 25 km
     reserve = bornesAutour(nom);
     if (reserve.length) {
-      afficherStations(reserve, "📡 Réseau indisponible — <b>bornes officielles intégrées autour de " + nom + "</b> (" + reserve.length + " bornes à moins de 25 km, état 2026). Le signalement et le planificateur fonctionnent normalement.", false);
+      afficherStations(reserve, "🟡 <b>Réseau bloqué — réserve intégrée</b> : " + reserve.length + " borne(s) rapide(s) autour de " + nom + " (à moins de 25 km, état 2026). Si une recherche précédente montrait plus de bornes, c'est que le réseau répondait : le direct affiche toutes les puissances, la réserve uniquement les bornes rapides.", false);
       return;
     }
   }
   if (reserve.length) {
-    afficherStations(reserve, "📡 Réseau indisponible — <b>bornes officielles intégrées</b> pour " + nom + " (" + reserve.length + " bornes rapides 50 kW et +, état 2026). Le signalement et le planificateur fonctionnent normalement.", false);
+    afficherStations(reserve, "🟡 <b>Réseau bloqué — réserve intégrée</b> : " + reserve.length + " borne(s) rapide(s) (50 kW et +) pour " + nom + " (état 2026). Si une recherche précédente montrait plus de bornes, c'est que le réseau répondait : le direct affiche toutes les puissances, la réserve uniquement les bornes rapides.", false);
     return;
   }
   const demo = STATIONS_DEMO.filter(s => s.commune === nom.toUpperCase());
@@ -805,11 +805,17 @@ async function calculerTrajet() {
     choisissables.sort((a, b) => detour(a) - detour(b) || (b.puissance - a.puissance) || (distanceKm(a.lat, a.lon, arrivee.lat, arrivee.lon) - distanceKm(b.lat, b.lon, arrivee.lat, arrivee.lon)));
 
     if (optimiser) {
-      // Mode économie : parmi les bornes sur la route, les moins chères d'abord (à détour égal)
-      choisissables = choisissables.slice(0, Math.max(3, Math.ceil(choisissables.length * 0.4)));
-      choisissables.sort((a, b) => extrairePrix(a) - extrairePrix(b) || detour(a) - detour(b));
+      // Mode économie : les moins chères d'abord — mais JAMAIS de borne lente sur un long trajet
+      // (une 22 kW gratuite fait perdre ~1 h de charge : l'économie ne doit pas ruiner le voyage)
+      const tresRapides = choisissables.filter(s => s.puissance >= 100);
+      const rapides50 = choisissables.filter(s => s.puissance >= 50);
+      let pool = tresRapides.length ? tresRapides : (rapides50.length ? rapides50 : choisissables);
+      pool = pool.slice(0, Math.max(3, Math.ceil(pool.length * 0.4)));
+      pool.sort((a, b) => extrairePrix(a) - extrairePrix(b) || detour(a) - detour(b));
+      atteignables = pool;
+    } else {
+      atteignables = choisissables;
     }
-    atteignables = choisissables;
     const choix = atteignables[0];
     dejaUtilisees.add(choix.id);
     const dEffectuee = Math.round(distanceKm(position.lat, position.lon, choix.lat, choix.lon) * FACTEUR_ROUTE);
@@ -913,5 +919,6 @@ function init() {
 
 init();
 </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" nonce="4MfUz8CWDIl8CtdZGTawfw==" data-cf-beacon='{"version":"2024.11.0","token":"36b4216ae2dc4d5488c249161e71fe1e","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
