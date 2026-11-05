@@ -181,6 +181,18 @@
 </header>
 
 <div class="fiche-overlay" id="overlay-installation" onclick="if(event.target===this)fermerInstallation()">
+  <!-- Formulaire invisible : transmission des signalements vers l'équipe (même circuit que le formulaire contact) -->
+  <form id="form-signalement-cache" action="https://formsubmit.co/pascal.gerard08@gmail.com" method="POST" target="iframe-signalement" style="display:none">
+    <input type="hidden" name="_subject" value="🚨 Signalement RechargeSereine" />
+    <input type="hidden" name="_template" value="table" />
+    <input type="hidden" name="_captcha" value="false" />
+    <input type="hidden" name="borne" value="" />
+    <input type="hidden" name="commune" value="" />
+    <input type="hidden" name="probleme" value="" />
+    <input type="hidden" name="commentaire" value="" />
+    <input type="hidden" name="date" value="" />
+  </form>
+  <iframe name="iframe-signalement" title="transmission signalement" style="display:none" aria-hidden="true"></iframe>
   <div class="fiche" style="max-width:480px">
     <button class="fermer" onclick="fermerInstallation()">✕</button>
     <h2>📲 Installer RechargeSereine</h2>
@@ -297,21 +309,15 @@ function enregistrerSignalement(s) {
   const liste = lireSignalements();
   liste.push(s);
   localStorage.setItem(CLES_SIGNALEMENTS, JSON.stringify(liste));
-  // Transmission à l'équipe (email) : permet de vérifier et corriger les données pour tous
+  // Transmission à l'équipe (email) : même circuit que le formulaire contact (formsubmit.co)
   try {
-    fetch("https://formsubmit.co/ajax/pascal.gerard08@gmail.com", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({
-        _subject: "🚨 Signalement RechargeSereine",
-        _template: "table",
-        borne: s.enseigne || s.station,
-        commune: s.commune || "n.c.",
-        type: TYPES_SIGNALEMENT[s.type] ? TYPES_SIGNALEMENT[s.type].libelle : s.type,
-        commentaire: s.commentaire || "(aucun)",
-        date: formaterDate(s.date)
-      })
-    }).catch(() => {}); // silencieux : l'envoi ne doit jamais bloquer l'usage local
+    const f = document.getElementById("form-signalement-cache");
+    f.querySelector("[name=borne]").value = s.enseigne || s.station;
+    f.querySelector("[name=commune]").value = s.commune || "n.c.";
+    f.querySelector("[name=probleme]").value = TYPES_SIGNALEMENT[s.type] ? TYPES_SIGNALEMENT[s.type].libelle : s.type;
+    f.querySelector("[name=commentaire]").value = s.commentaire || "(aucun)";
+    f.querySelector("[name=date]").value = formaterDate(s.date);
+    f.submit(); // cible : iframe invisible — la page ne change pas
   } catch (e) { /* offline : le signalement local reste enregistré */ }
 }
 function signalementsDe(idStation) {
@@ -976,6 +982,6 @@ if ("serviceWorker" in navigator) {
 
 init();
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" nonce="9eR8LjEGlQmiKzCJi8e1qA==" data-cf-beacon='{"version":"2024.11.0","token":"36b4216ae2dc4d5488c249161e71fe1e","spa":2}' crossorigin="anonymous"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" nonce="zj3MgIRF2jAvzuqQEtoOew==" data-cf-beacon='{"version":"2024.11.0","token":"36b4216ae2dc4d5488c249161e71fe1e","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
