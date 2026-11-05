@@ -4,6 +4,11 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>RechargeSereine — Trouvez une borne, sereinement</title>
+<meta name="theme-color" content="#16a34a" />
+<meta name="description" content="Toutes les bornes de recharge officielles de France et le planificateur de trajet électrique — gratuit, sans installation ni inscription." />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icone-192.png" />
+<link rel="icon" type="image/png" href="icone-192.png" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root {
@@ -171,8 +176,24 @@
     <div class="logo">Recharge<span style="font-weight:300">Sereine</span> <span class="eclair">⚡</span></div>
     <div class="slogan">Bornes signalées par la communauté · prix réels · trajets sereins</div>
   </div>
-  <span class="badge-beta">VERSION PILOTE — TESTEURS</span>
+  <span class="badge-beta" id="btn-installer-app" style="cursor:pointer" onclick="ouvrirAideInstallation()">📲 Installer l'appli</span>
+  <span class="badge-beta" style="background:#e2e8f0;color:#334155">VERSION PILOTE — TESTEURS</span>
 </header>
+
+<div class="fiche-overlay" id="overlay-installation" onclick="if(event.target===this)fermerInstallation()">
+  <div class="fiche" style="max-width:480px">
+    <button class="fermer" onclick="fermerInstallation()">✕</button>
+    <h2>📲 Installer RechargeSereine</h2>
+    <div class="adresse">Sur votre écran d'accueil, comme une vraie application — sans store, sans compte.</div>
+    <div class="caracs">
+      <div class="carac"><div class="lbl">🤖 Android (Chrome)</div><div class="val" style="font-size:.82rem;font-weight:400">Menu <b>⋮</b> en haut à droite → <b>« Ajouter à l'écran d'accueil »</b> (ou « Installer l'application »)</div></div>
+      <div class="carac"><div class="lbl">🍎 iPhone / iPad (Safari)</div><div class="val" style="font-size:.82rem;font-weight:400">Bouton <b>Partager</b> <span style="font-weight:400">(carré avec flèche)</span> → <b>« Sur l'écran d'accueil »</b></div></div>
+      <div class="carac"><div class="lbl">💻 Ordinateur (Chrome/Edge)</div><div class="val" style="font-size:.82rem;font-weight:400">Icône <b>⊕ installer</b> dans la barre d'adresse, ou menu → « Installer »</div></div>
+    </div>
+    <div style="font-size:.85rem;color:var(--gris)">L'appli s'ouvrira ensuite plein écran, avec son icône verte ⚡, comme n'importe quelle application. Mises à jour automatiques, rien à gérer.</div>
+    <button id="btn-install-native" style="display:none;margin-top:14px;width:100%;padding:12px;border:none;border-radius:12px;background:var(--vert);color:#fff;font-weight:700;font-size:1rem;cursor:pointer">⚡ Installer maintenant</button>
+  </div>
+</div>
 
 <div class="barre">
   <input type="text" id="champ-recherche" placeholder="🔎 Une commune (ex : Challans, Nantes, Paris…) puis Entrée" />
@@ -276,6 +297,22 @@ function enregistrerSignalement(s) {
   const liste = lireSignalements();
   liste.push(s);
   localStorage.setItem(CLES_SIGNALEMENTS, JSON.stringify(liste));
+  // Transmission à l'équipe (email) : permet de vérifier et corriger les données pour tous
+  try {
+    fetch("https://formsubmit.co/ajax/pascal.gerard08@gmail.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        _subject: "🚨 Signalement RechargeSereine",
+        _template: "table",
+        borne: s.enseigne || s.station,
+        commune: s.commune || "n.c.",
+        type: TYPES_SIGNALEMENT[s.type] ? TYPES_SIGNALEMENT[s.type].libelle : s.type,
+        commentaire: s.commentaire || "(aucun)",
+        date: formaterDate(s.date)
+      })
+    }).catch(() => {}); // silencieux : l'envoi ne doit jamais bloquer l'usage local
+  } catch (e) { /* offline : le signalement local reste enregistré */ }
 }
 function signalementsDe(idStation) {
   return lireSignalements().filter(s => s.station === idStation);
@@ -504,7 +541,7 @@ function ouvrirFiche(s) {
         '<button data-type="tarif">💸 Tarif incorrect</button>' +
         '<button data-type="ok">✅ Borne fonctionnelle</button>' +
       '</div>' +
-      '<div class="confiramtion" id="confirmation-signalement">Merci ! Votre signalement est enregistré — il apparaît désormais pour les autres conducteurs. ⚡</div>' +
+      '<div class="confiramtion" id="confirmation-signalement">Merci ! Votre signalement est enregistré sur votre appareil et transmis à l\'équipe RechargeSereine pour vérification ⚡</div>' +
     '</section>' +
 
     '<section class="liste-signalements"><h4>👀 Signalements récents (' + signalements.length + ')</h4>' +
@@ -520,7 +557,7 @@ function ouvrirFiche(s) {
   fiche.querySelectorAll(".types-signalement button").forEach(btn => {
     btn.addEventListener("click", () => {
       const commentaire = prompt("Un détail à ajouter ? (optionnel — ex : « écranHS, 3e borne »)") || "";
-      enregistrerSignalement({ station: s.id, type: btn.dataset.type, commentaire: commentaire.trim(), date: Date.now() });
+      enregistrerSignalement({ station: s.id, enseigne: s.enseigne, commune: s.commune, adresse: s.adresse || "", type: btn.dataset.type, commentaire: commentaire.trim(), date: Date.now() });
       document.getElementById("confirmation-signalement").style.display = "block";
       renduListe();
       dessinerMarqueurs();
@@ -917,8 +954,28 @@ function init() {
   });
 }
 
+/* =========================================================
+   INSTALLATION (PWA) — icône sur l'écran d'accueil
+   ========================================================= */
+let evenementInstallation = null;
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  evenementInstallation = e;
+  const btn = document.getElementById("btn-install-native");
+  if (btn) { btn.style.display = "block"; btn.onclick = async () => { evenementInstallation.prompt(); await evenementInstallation.userChoice; evenementInstallation = null; btn.style.display = "none"; }; }
+});
+function ouvrirAideInstallation() {
+  document.getElementById("overlay-installation").classList.add("ouvert");
+}
+function fermerInstallation() {
+  document.getElementById("overlay-installation").classList.remove("ouvert");
+}
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
 init();
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" nonce="4MfUz8CWDIl8CtdZGTawfw==" data-cf-beacon='{"version":"2024.11.0","token":"36b4216ae2dc4d5488c249161e71fe1e","spa":2}' crossorigin="anonymous"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" nonce="9eR8LjEGlQmiKzCJi8e1qA==" data-cf-beacon='{"version":"2024.11.0","token":"36b4216ae2dc4d5488c249161e71fe1e","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
