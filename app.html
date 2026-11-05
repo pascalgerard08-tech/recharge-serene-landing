@@ -181,18 +181,6 @@
 </header>
 
 <div class="fiche-overlay" id="overlay-installation" onclick="if(event.target===this)fermerInstallation()">
-  <!-- Formulaire invisible : transmission des signalements vers l'équipe (même circuit que le formulaire contact) -->
-  <form id="form-signalement-cache" action="https://formsubmit.co/pascal.gerard08@gmail.com" method="POST" target="iframe-signalement" style="display:none">
-    <input type="hidden" name="_subject" value="🚨 Signalement RechargeSereine" />
-    <input type="hidden" name="_template" value="table" />
-    <input type="hidden" name="_captcha" value="false" />
-    <input type="hidden" name="borne" value="" />
-    <input type="hidden" name="commune" value="" />
-    <input type="hidden" name="probleme" value="" />
-    <input type="hidden" name="commentaire" value="" />
-    <input type="hidden" name="date" value="" />
-  </form>
-  <iframe name="iframe-signalement" title="transmission signalement" style="display:none" aria-hidden="true"></iframe>
   <div class="fiche" style="max-width:480px">
     <button class="fermer" onclick="fermerInstallation()">✕</button>
     <h2>📲 Installer RechargeSereine</h2>
@@ -309,16 +297,23 @@ function enregistrerSignalement(s) {
   const liste = lireSignalements();
   liste.push(s);
   localStorage.setItem(CLES_SIGNALEMENTS, JSON.stringify(liste));
-  // Transmission à l'équipe (email) : même circuit que le formulaire contact (formsubmit.co)
+  // Transmission directe : ouvre la messagerie de l'utilisateur avec l'email pré-rempli
+  // (circuit garanti : un vrai email envoyé par une personne, sans service intermédiaire)
+  const libelle = TYPES_SIGNALEMENT[s.type] ? TYPES_SIGNALEMENT[s.type].libelle : s.type;
+  const sujet = "🚨 Signalement borne — " + (s.enseigne || s.station) + " (" + (s.commune || "") + ")";
+  const corps =
+    "Bonjour Pascal,\n\n" +
+    "Je signale un problème sur une borne RechargeSereine :\n\n" +
+    "Borne : " + (s.enseigne || s.station) + "\n" +
+    "Commune : " + (s.commune || "n.c.") + "\n" +
+    "Adresse : " + (s.adresse || "n.c.") + "\n" +
+    "Problème : " + libelle + "\n" +
+    "Détail : " + (s.commentaire || "(aucun)") + "\n" +
+    "Le : " + formaterDate(s.date) + "\n\n" +
+    "Cordialement,\n(votre nom)";
   try {
-    const f = document.getElementById("form-signalement-cache");
-    f.querySelector("[name=borne]").value = s.enseigne || s.station;
-    f.querySelector("[name=commune]").value = s.commune || "n.c.";
-    f.querySelector("[name=probleme]").value = TYPES_SIGNALEMENT[s.type] ? TYPES_SIGNALEMENT[s.type].libelle : s.type;
-    f.querySelector("[name=commentaire]").value = s.commentaire || "(aucun)";
-    f.querySelector("[name=date]").value = formaterDate(s.date);
-    f.submit(); // cible : iframe invisible — la page ne change pas
-  } catch (e) { /* offline : le signalement local reste enregistré */ }
+    window.location.href = "mailto:pascal.gerard08@gmail.com?subject=" + encodeURIComponent(sujet) + "&body=" + encodeURIComponent(corps);
+  } catch (e) { /* si la messagerie n'est pas configurée : le signalement local reste enregistré */ }
 }
 function signalementsDe(idStation) {
   return lireSignalements().filter(s => s.station === idStation);
@@ -547,7 +542,7 @@ function ouvrirFiche(s) {
         '<button data-type="tarif">💸 Tarif incorrect</button>' +
         '<button data-type="ok">✅ Borne fonctionnelle</button>' +
       '</div>' +
-      '<div class="confiramtion" id="confirmation-signalement">Merci ! Votre signalement est enregistré sur votre appareil et transmis à l\'équipe RechargeSereine pour vérification ⚡</div>' +
+      '<div class="confiramtion" id="confirmation-signalement">Merci ! Votre signalement est enregistré sur votre appareil — votre messagerie vient de s\'ouvrir avec l\'email pré-rempli : cliquez sur Envoyer pour le transmettre à l\'équipe ⚡</div>' +
     '</section>' +
 
     '<section class="liste-signalements"><h4>👀 Signalements récents (' + signalements.length + ')</h4>' +
@@ -982,6 +977,6 @@ if ("serviceWorker" in navigator) {
 
 init();
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" nonce="zj3MgIRF2jAvzuqQEtoOew==" data-cf-beacon='{"version":"2024.11.0","token":"36b4216ae2dc4d5488c249161e71fe1e","spa":2}' crossorigin="anonymous"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" nonce="/tHcc/M3NbObA6Nr7fU0vw==" data-cf-beacon='{"version":"2024.11.0","token":"36b4216ae2dc4d5488c249161e71fe1e","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
